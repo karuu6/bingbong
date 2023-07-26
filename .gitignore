@@ -1,0 +1,14 @@
+# Rithmic
+13.0.0.0/
+17.18.0.0/
+
+# AWS
+*.pem
+
+# Build
+log/
+lib/
+bin/
+
+# App
+data/
