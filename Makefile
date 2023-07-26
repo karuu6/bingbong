@@ -9,5 +9,9 @@ bin/md: src/md.cpp include/RApiPlus.h
 bin/luper: src/luper.cpp include/RApiPlus.h
 	$(CC) $(FLAGS) $(INCLUDES) -o bin/luper src/luper.cpp $(LIBS)
 
+bin/latency: src/latency.cpp include/RApiPlus.h
+	$(CC) $(FLAGS) $(INCLUDES) -o bin/latency src/latency.cpp $(LIBS)
+
 md: bin/md
 luper: bin/luper
+latency: bin/latency
