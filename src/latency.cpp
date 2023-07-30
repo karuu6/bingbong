@@ -11,6 +11,7 @@ int TsLoggedIn = 0;
 RApi::REngine *pEngine;
 RApi::LimitOrderParams order;
 
+int state = 0;
 long long tickTs = 0;
 
 bool cmp(tsNCharcb a, tsNCharcb b)
@@ -73,39 +74,25 @@ int Callbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
     return OK;
 }
 
-// int Callbacks::AccountList(RApi::AccountListInfo *pInfo, void *pContext, int *aiCode)
-// {
-//     int iCode;
-//     pInfo->dump(&iCode);
-//     if (pInfo->iArrayLen > 0)
-//     {
-//         RApi::AccountInfo *pAccount = &pInfo->asAccountInfoArray[0];
-//         memccpy(g_cAccountId, pAccount->sAccountId.pData, 0, g_iMAX_LEN);
-//         memccpy(g_cIbId, pAccount->sIbId.pData, 0, g_iMAX_LEN);
-//         memccpy(g_cFcmId, pAccount->sFcmId.pData, 0, g_iMAX_LEN);
-//         ReceivedAccount = 1;
-//     }
-//     else
-//     {
-//         ReceivedAccount = -1;
-//     }
-//     *aiCode = API_OK;
-//     return OK;
-// }
-
 int Callbacks::TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode)
 {
-    tickTs = pInfo->iSsboe;
-    tickTs = (tickTs * 1000 * 1000) + pInfo->iUsecs;
-
-    order.dPrice = pInfo->dPrice - 10;
-
-    int iCode;
-    if (!pEngine->sendOrder(&order, &iCode))
+    if (state == 0)
     {
-        std::cerr << "error placing order: " << iCode << std::endl;
-    }
+        tickTs = pInfo->iSsboe;
+        tickTs = (tickTs * 1000 * 1000) + pInfo->iUsecs;
 
+        order.dPrice = pInfo->dPrice - 10;
+
+        int iCode;
+        if (!pEngine->sendOrder(&order, &iCode))
+        {
+            std::cerr << "error placing order: " << iCode << std::endl;
+        }
+        else
+        {
+            state = 1;
+        }
+    }
     *aiCode = API_OK;
     return OK;
 }
@@ -114,6 +101,7 @@ int Callbacks::LineUpdate(RApi::LineInfo *pInfo, void *pContext, int *aiCode)
 {
     if (cmp(pInfo->sStatus, RApi::sLINE_STATUS_ORDER_SENT_TO_EXCH))
     {
+        state = 0;
         long long tradeTs = pInfo->iSsboe;
         tradeTs = (tradeTs * 1000 * 1000) + pInfo->iUsecs;
         std::cout << tradeTs - tickTs << " micros" << std::endl;
@@ -150,7 +138,7 @@ int main(int argc, char **argv)
     }
 
     RApi::REngineParams oParams;
-    oParams.sAppName = {"luper", (int)strlen("luper")};
+    oParams.sAppName = {"latency", (int)strlen("latency")};
     oParams.sAppVersion = {version, (int)strlen(version)};
     oParams.envp = Envp;
     oParams.pAdmCallbacks = pAdmCallbacks;
