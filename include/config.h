@@ -4,9 +4,9 @@
 #define BAD 1
 #define GOOD 0
 
-char *appname = "kasu:bingbong";
+char *appname = "kasu:luper";
 char *version = "0.0.1";
-char *logfile = "log/bingbong.log";
+char *logfile = "log/luper.log";
 
 char *Envp[9] = {
     "MML_DMN_SRVR_ADDR=ritpz01001.01.rithmic.com:65000~ritpz01000.01.rithmic.com:65000~ritpz01001.01.rithmic.net:65000~ritpz01000.01.rithmic.net:65000~ritpz01001.01.theomne.net:65000~ritpz01000.01.theomne.net:65000~ritpz01001.01.theomne.com:65000~ritpz01000.01.theomne.com:65000",
