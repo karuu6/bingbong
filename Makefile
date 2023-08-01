@@ -11,5 +11,10 @@ bin/md: src/md.cpp include/RApiPlus.h
 bin/latency: src/latency.cpp include/RApiPlus.h
 	$(CC) $(FLAGS) $(INCLUDES) -o bin/latency src/latency.cpp $(LIBS)
 
+bin/gg: src/gg.cpp include/RApiPlus.h
+	$(CC) $(FLAGS) $(INCLUDES) -o bin/gg src/gg.cpp $(LIBS)
+
+
+gg: bin/gg
 md: bin/md
 latency: bin/latency
