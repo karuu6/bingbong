@@ -15,7 +15,7 @@
 
 int MdLoggedIn = 0;
 int TsLoggedIn = 0;
-bool shutdown = false;
+bool Shutdown = false;
 
 RApi::REngine *pEngine;
 RApi::MarketOrderParams buyOrder;
@@ -284,7 +284,6 @@ int main(int argc, char **argv)
     sellOrder.sBuySellType = RApi::sBUY_SELL_TYPE_SELL;
     sellOrder.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
 
-
     int iFlags = (RApi::MD_PRINTS);
 
     if (!pEngine->subscribe(&sExchange, &sTicker, iFlags, &iCode))
@@ -296,8 +295,8 @@ int main(int argc, char **argv)
         return BAD;
     }
 
-    while (!shutdown) {
-        sleep(60);
+    while (!Shutdown) {
+        sleep(1);
     }
 
     delete pEngine;
