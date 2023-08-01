@@ -11,6 +11,7 @@
 #define M2 0.69479
 #define M3 0.85671
 #define WIN 6947
+#define QTY 1
 
 int MdLoggedIn = 0;
 int TsLoggedIn = 0;
@@ -258,13 +259,14 @@ int main(int argc, char **argv)
         delete pEngine;
         delete pCallbacks;
         delete pAdmCallbacks;
+        return BAD;
     }
 
     tsNCharcb sTicker = {ticker, (int)strlen(ticker)};
     tsNCharcb sExchange = {"CME", (int)strlen("CME")};
     tsNCharcb sTradeRoute = {"globex", (int)strlen("globex")};
     
-    buyOrder.iQty = 1;
+    buyOrder.iQty = QTY;
     buyOrder.sTicker = sTicker;
     buyOrder.sExchange = sExchange;
     buyOrder.pAccount = &pAccount;
@@ -273,7 +275,7 @@ int main(int argc, char **argv)
     buyOrder.sBuySellType = RApi::sBUY_SELL_TYPE_BUY;
     buyOrder.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
 
-    sellOrder.iQty = 1;
+    sellOrder.iQty = QTY;
     sellOrder.sTicker = sTicker;
     sellOrder.sExchange = sExchange;
     sellOrder.pAccount = &pAccount;
@@ -291,6 +293,7 @@ int main(int argc, char **argv)
         delete pEngine;
         delete pCallbacks;
         delete pAdmCallbacks;
+        return BAD;
     }
 
     while (!shutdown) {
