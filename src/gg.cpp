@@ -14,13 +14,14 @@
 
 int MdLoggedIn = 0;
 int TsLoggedIn = 0;
+bool shutdown = false;
 
 RApi::REngine *pEngine;
 RApi::MarketOrderParams buyOrder;
 RApi::MarketOrderParams sellOrder;
 
 int state = 0;
-double sumpx = 0;
+double sumpx = 0; 
 std::queue<double> vals;
 
 bool cmp(tsNCharcb a, tsNCharcb b)
@@ -292,7 +293,9 @@ int main(int argc, char **argv)
         delete pAdmCallbacks;
     }
 
-    fgetc(stdin);
+    while (!shutdown) {
+        sleep(60);
+    }
 
     delete pEngine;
     delete pCallbacks;
