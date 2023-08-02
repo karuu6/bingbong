@@ -288,9 +288,10 @@ int main(int argc, char **argv)
         return BAD;
     }
 
-    sleep(23400);
+    sleep(1);
 
-    if (!pEngine->exitPosition(&pAccount, NULL, NULL, NULL, NULL, NULL, &iCode))
+    tsNCharcb exitType = RApi::sORDER_ENTRY_TYPE_AUTO;
+    if (!pEngine->exitPosition(&pAccount, NULL, NULL, &exitType, NULL, NULL, &iCode))
     {
         std::cerr << "error exiting all positions: " << iCode << std::endl;
     }
