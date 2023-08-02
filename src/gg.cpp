@@ -15,7 +15,6 @@
 
 int MdLoggedIn = 0;
 int TsLoggedIn = 0;
-bool Shutdown = false;
 
 RApi::REngine *pEngine;
 RApi::MarketOrderParams buyOrder;
@@ -24,11 +23,6 @@ RApi::MarketOrderParams sellOrder;
 int state = 0;
 double sumpx = 0; 
 std::queue<double> vals;
-
-bool cmp(tsNCharcb a, tsNCharcb b)
-{
-    return (a.iDataLen == b.iDataLen) && (strncmp(a.pData, b.pData, a.iDataLen) == 0);
-}
 
 class AdmCallbacks : public RApi::AdmCallbacks
 {
@@ -236,7 +230,6 @@ int main(int argc, char **argv)
     while (TsLoggedIn == 0)
     {
         sleep(1);
-
     }
 
     if (TsLoggedIn == -1)
@@ -295,8 +288,11 @@ int main(int argc, char **argv)
         return BAD;
     }
 
-    while (!Shutdown) {
-        sleep(1);
+    sleep(23400);
+
+    if (!pEngine->exitPosition(&pAccount, NULL, NULL, NULL, NULL, NULL, &iCode))
+    {
+        std::cerr << "error exiting all positions: " << iCode << std::endl;
     }
 
     delete pEngine;
