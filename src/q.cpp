@@ -17,6 +17,7 @@
 
 int MdLoggedIn = 0;
 int TsLoggedIn = 0;
+bool RcvdPriceIncr = false;
 
 RApi::REngine *pEngine;
 RApi::MarketOrderParams buyOrder;
@@ -53,6 +54,7 @@ public:
     virtual int Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode);
     virtual int TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode);
     virtual int LineUpdate(RApi::LineInfo *pInfo, void *pContext, int *aiCode);
+    virtual int PriceIncrUpdate(RApi::PriceIncrInfo *pInfo, void *pContext, int *aiCode);
 };
 
 int AdmCallbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
@@ -153,25 +155,37 @@ void OnRangeBar()
     int iCode;
     if (dotp > M0 && z > M2 && cur_pos < MXCP)
     {
-        pEngine->sendOrder(&buyOrder, &iCode);
+        if (!pEngine->sendOrder(&buyOrder, &iCode))
+        {
+            std::cerr << "error placing order: " << iCode << std::endl;
+        }
         // cur_pos += 1;
         // margin -= cpx;
     }
     else if (dotp < M1 && z > M2 && cur_pos > -MXCP)
     {
-        pEngine->sendOrder(&sellOrder, &iCode);
+        if (!pEngine->sendOrder(&sellOrder, &iCode))
+        {
+            std::cerr << "error placing order: " << iCode << std::endl;
+        }
         // cur_pos -= 1;
         // margin += cpx;
     }
     else if (dotp < M1 && z < M2 && cur_pos < MXCP)
     {
-        pEngine->sendOrder(&buyOrder, &iCode);
+        if (!pEngine->sendOrder(&buyOrder, &iCode))
+        {
+            std::cerr << "error placing order: " << iCode << std::endl;
+        }
         // cur_pos += 1;
         // margin -= cpx;
     }
     else if (dotp > M0 && z < M2 && cur_pos > -MXCP)
     {
-        pEngine->sendOrder(&sellOrder, &iCode);
+        if (!pEngine->sendOrder(&sellOrder, &iCode))
+        {
+            std::cerr << "error placing order: " << iCode << std::endl;
+        }
         // cur_pos -= 1;
         // margin += cpx;
     }
@@ -197,6 +211,16 @@ int Callbacks::LineUpdate(RApi::LineInfo *pInfo, void *pContext, int *aiCode)
         std::cout << side << " | " << pInfo->dAvgFillPrice << std::endl << std::endl;
     }
 
+    *aiCode = API_OK;
+    return OK;
+}
+
+int Callbacks::PriceIncrUpdate(RApi::PriceIncrInfo *pInfo, void *pContext, int *aiCode)
+{
+    if (pInfo->iRpCode == API_OK)
+    {
+        RcvdPriceIncr = true;
+    }
     *aiCode = API_OK;
     return OK;
 }
@@ -345,6 +369,20 @@ int main(int argc, char **argv)
     sellOrder.sBuySellType = RApi::sBUY_SELL_TYPE_SELL;
     sellOrder.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
 
+    if (!pEngine->getPriceIncrInfo(&sExchange, &sTickerOrder, &iCode))
+    {
+        std::cerr << "error subscribing to market data: " << iCode << std::endl;
+        delete pEngine;
+        delete pCallbacks;
+        delete pAdmCallbacks;
+        return BAD;
+    }
+
+    while (RcvdPriceIncr == false)
+    {
+        sleep(1);
+    }
+
     int iFlags = (RApi::MD_PRINTS);
 
     if (!pEngine->subscribe(&sExchange, &sTickerMd, iFlags, &iCode))
@@ -356,6 +394,7 @@ int main(int argc, char **argv)
         return BAD;
     }
 
+    std::cout << "armed..." << std::endl;
     sleep(23400);
 
     tsNCharcb exitType = RApi::sORDER_ENTRY_TYPE_AUTO;
