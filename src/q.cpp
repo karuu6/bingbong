@@ -1,4 +1,5 @@
-#include <queue>
+#include <cmath>
+#include <limits>
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
@@ -6,37 +7,51 @@
 #include "config.h"
 #include "RApiPlus.h"
 
-#define A 1e-3
-#define QTY 1
-#define MXCP 3
-#define SZ 5
+#define ROWS 10000
+#define SIG_WIDTH 5
+#define FEAT_WIDTH 7
 
-#define M0 5.951e-03
-#define M1 -5.344e-04
-#define M2 9.351e-03
+#define WIN 1 // MINUTES
+#define FWD 5
 
+int IhLoggedIn = 0;
 int MdLoggedIn = 0;
-int TsLoggedIn = 0;
-bool RcvdPriceIncr = false;
-
 RApi::REngine *pEngine;
-RApi::MarketOrderParams buyOrder;
-RApi::MarketOrderParams sellOrder;
 
-int cur_pos = 0;
-double margin = 0;
+unsigned int ix = 0;
+double signals[ROWS][SIG_WIDTH];
+double features[ROWS][FEAT_WIDTH];
 
-long vl = 0;
-double opx = 0;
-double hpx = 0;
-double lpx = 0;
-double cpx = 0;
-long double ts = 0;
+double max_feat(unsigned int start, unsigned int end, unsigned int col);
+double min_feat(unsigned int start, unsigned int end, unsigned int col);
 
-double Q[4] = {0, 0, 0, 0};
-double l_f[4] = {0, 0, 0, 0};
+double max_feat(unsigned int start, unsigned int end, unsigned int col)
+{
+    if (col >= FEAT_WIDTH || start < 0 || end >= ROWS || end < start)
+    {
+        return nan("");
+    }
+    double mx = std::numeric_limits<double>::min();
+    for (unsigned int j = start; j <= end; j++)
+    {
+        mx = std::max(mx, features[j][col]);
+    }
+    return mx;
+}
 
-void OnRangeBar();
+double min_feat(unsigned int start, unsigned int end, unsigned int col)
+{
+    if (col >= FEAT_WIDTH || start < 0 || end >= ROWS || end < start)
+    {
+        return nan("");
+    }
+    double mn = std::numeric_limits<double>::max();
+    for (unsigned int j = start; j <= end; j++)
+    {
+        mn = std::min(mn, features[j][col]);
+    }
+    return mn;
+}
 
 class AdmCallbacks : public RApi::AdmCallbacks
 {
@@ -51,16 +66,14 @@ class Callbacks : public RApi::RCallbacks
 public:
     Callbacks() {}
     ~Callbacks() {}
+    virtual int Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode);
     virtual int Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode);
-    virtual int TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode);
-    virtual int LineUpdate(RApi::LineInfo *pInfo, void *pContext, int *aiCode);
-    virtual int PriceIncrUpdate(RApi::PriceIncrInfo *pInfo, void *pContext, int *aiCode);
 };
 
 int AdmCallbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
 {
     std::cout << "AdmCallback " << pInfo->iAlertType << ": " << pInfo->sMessage.pData << std::endl;
-    
+
     *aiCode = API_OK;
     return OK;
 }
@@ -79,15 +92,15 @@ int Callbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
             MdLoggedIn = 1;
         }
     }
-    else if (pInfo->iConnectionId == RApi::TRADING_SYSTEM_CONNECTION_ID)
+    else if (pInfo->iConnectionId == RApi::INTRADAY_HISTORY_CONNECTION_ID)
     {
         if (pInfo->iAlertType == RApi::ALERT_LOGIN_FAILED)
         {
-            TsLoggedIn = -1;
+            IhLoggedIn = -1;
         }
         else if (pInfo->iAlertType == RApi::ALERT_LOGIN_COMPLETE)
         {
-            TsLoggedIn = 1;
+            IhLoggedIn = 1;
         }
     }
 
@@ -95,149 +108,63 @@ int Callbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
     return OK;
 }
 
-int Callbacks::TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode)
+int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
 {
-    if (opx == 0)
+    features[ix][0] = pInfo->dHighPrice;
+    features[ix][1] = pInfo->dLowPrice;
+    features[ix][2] = pInfo->dClosePrice;
+    if (ix >= 8)
     {
-        opx = pInfo->dPrice;
-        hpx = pInfo->dPrice;
-        lpx = pInfo->dPrice;
-        cpx = pInfo->dPrice;
-        ts = pInfo->iSsboe;
-        ts = (ts * 1000 * 1000) + pInfo->iUsecs;
+        features[ix][3] = (max_feat(ix - 8, ix, 0) + min_feat(ix - 8, ix, 1)) / 2;
     }
-    vl += pInfo->llSize;
-    cpx = pInfo->dPrice;
-    hpx = std::max(hpx, pInfo->dPrice);
-    lpx = std::min(lpx, pInfo->dPrice);
-
-    if (hpx - lpx >= SZ)
+    if (ix >= 25)
     {
-        long double cts = pInfo->iSsboe;
-        cts = (cts * 1000 * 1000) + pInfo->iUsecs;
-        ts = (cts - ts) / 1e6;
-        
-        OnRangeBar();
-        
-        vl = 0;
-        ts = 0;
-        opx = 0;
-        hpx = 0;
-        lpx = 0;
-        cpx = 0;
+        features[ix][4] = (max_feat(ix - 25, ix, 0) + min_feat(ix - 25, ix, 1)) / 2;
     }
-
-    *aiCode = API_OK;
-    return OK;
-}
-
-void OnRangeBar()
-{
-    double f0 = (cpx - opx) / SZ;
-    double f1 = (hpx - cpx) / SZ;
-    double f2 = (cpx - lpx) / SZ;
-    double f3 = vl / (ts * 100);
-    double dotp = (l_f[0] * Q[0]) + (l_f[1] * Q[1]) + (l_f[2] * Q[2]) + (l_f[3] * Q[3]);
-
-    Q[0] += A * (dotp - f0) * l_f[0];
-    Q[1] += A * (dotp - f0) * l_f[1];
-    Q[2] += A * (dotp - f0) * l_f[2];
-    Q[3] += A * (dotp - f0) * l_f[3];
-
-    l_f[0] = f0;
-    l_f[1] = f1;
-    l_f[2] = f2;
-    l_f[3] = f3;
-
-    dotp = (l_f[0] * Q[0]) + (l_f[1] * Q[1]) + (l_f[2] * Q[2]) + (l_f[3] * Q[3]);
-    double z = std::abs(Q[0]) + std::abs(Q[1]) + std::abs(Q[2]) + std::abs(Q[3]);
-
-    int iCode;
-    if (dotp > M0 && z > M2 && cur_pos < MXCP)
+    if (ix >= 50)
     {
-        if (!pEngine->sendOrder(&buyOrder, &iCode))
-        {
-            std::cerr << "error placing order: " << iCode << std::endl;
-        }
-        // cur_pos += 1;
-        // margin -= cpx;
+        features[ix][5] = (features[ix - 25][3] + features[ix - 25][4])/ 2;
     }
-    else if (dotp < M1 && z > M2 && cur_pos > -MXCP)
+    if (ix >= 76)
     {
-        if (!pEngine->sendOrder(&sellOrder, &iCode))
-        {
-            std::cerr << "error placing order: " << iCode << std::endl;
-        }
-        // cur_pos -= 1;
-        // margin += cpx;
-    }
-    else if (dotp < M1 && z < M2 && cur_pos < MXCP)
-    {
-        if (!pEngine->sendOrder(&buyOrder, &iCode))
-        {
-            std::cerr << "error placing order: " << iCode << std::endl;
-        }
-        // cur_pos += 1;
-        // margin -= cpx;
-    }
-    else if (dotp > M0 && z < M2 && cur_pos > -MXCP)
-    {
-        if (!pEngine->sendOrder(&sellOrder, &iCode))
-        {
-            std::cerr << "error placing order: " << iCode << std::endl;
-        }
-        // cur_pos -= 1;
-        // margin += cpx;
+        features[ix][6] = (max_feat(ix - 76, ix - 25, 0) + min_feat(ix - 76, ix - 25, 1)) / 2;
+
+        signals[ix][0] = (features[ix][3] - features[ix][4]) / features[ix][4];
+        signals[ix][1] = (pInfo->dClosePrice - features[ix][4]) / features[ix][4];
+        signals[ix][2] = (pInfo->dClosePrice - std::max(features[ix][5], features[ix][6])) / std::max(features[ix][5], features[ix][6]);
+        signals[ix][3] = (pInfo->dClosePrice - features[ix][3]) / features[ix][3];
+        signals[ix][4] = (features[ix][5] - features[ix][6]) / features[ix][6];
     }
 
-    std::cout << "new bar: o|" << opx << " h|" << hpx << " l|" << lpx << " c|" << cpx << " v|" << vl << " t|" << ts << std::endl;
-    std::cout << "pnl: " << margin + cur_pos * cpx << " pos: " << cur_pos << std::endl << std::endl;
-}
-
-int Callbacks::LineUpdate(RApi::LineInfo *pInfo, void *pContext, int *aiCode)
-{
-    if (pInfo->bAvgFillPriceFlag) {
-        char side = *pInfo->sBuySellType.pData;
-        if (side == 'B')
-        {
-            cur_pos += pInfo->llFilled;
-            margin -= pInfo->llFilled * pInfo->dAvgFillPrice;
-        }
-        else
-        {
-            cur_pos -= pInfo->llFilled;
-            margin += pInfo->llFilled * pInfo->dAvgFillPrice;
-        }
-        std::cout << side << " | " << pInfo->dAvgFillPrice << std::endl << std::endl;
-    }
-
-    *aiCode = API_OK;
-    return OK;
-}
-
-int Callbacks::PriceIncrUpdate(RApi::PriceIncrInfo *pInfo, void *pContext, int *aiCode)
-{
-    if (pInfo->iRpCode == API_OK)
+    std::cout << ix << std::endl;
+    for (unsigned int j = 0; j < FEAT_WIDTH; j++)
     {
-        RcvdPriceIncr = true;
+        std::cout << features[ix][j] << "\t";
     }
+    std::cout << std::endl;
+    for (unsigned int j = 0; j < SIG_WIDTH; j++)
+    {
+        std::cout << signals[ix][j] << "\t";
+    }
+    std::cout << std::endl;
+
+    ix++;
     *aiCode = API_OK;
     return OK;
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 5)
+    if (argc < 4)
     {
-        std::cerr << "usage: " << argv[0] << " username password tickerMd tickerOrder" << std::endl;
+        std::cerr << "usage: " << argv[0] << " username password ticker" << std::endl;
         return BAD;
     }
 
     int iCode;
     char *username = argv[1];
     char *password = argv[2];
-    char *tickerMd = argv[3];
-    char *tickerOrder = argv[4];
+    char *ticker = argv[3];
 
     Callbacks *pCallbacks;
     AdmCallbacks *pAdmCallbacks;
@@ -254,7 +181,7 @@ int main(int argc, char **argv)
     }
 
     RApi::REngineParams oParams;
-    oParams.sAppName = {"q", (int)strlen("q")};
+    oParams.sAppName = {appname, (int)strlen(appname)};
     oParams.sAppVersion = {version, (int)strlen(version)};
     oParams.envp = Envp;
     oParams.pAdmCallbacks = pAdmCallbacks;
@@ -290,9 +217,9 @@ int main(int argc, char **argv)
     oLoginParams.sMdUser = {username, (int)strlen(username)};
     oLoginParams.sMdPassword = {password, (int)strlen(password)};
     oLoginParams.sMdCnnctPt = {MdConnectPt, (int)strlen(MdConnectPt)};
-    oLoginParams.sTsUser = {username, (int)strlen(username)};
-    oLoginParams.sTsPassword = {password, (int)strlen(password)};
-    oLoginParams.sTsCnnctPt = {TsConnectPt, (int)strlen(TsConnectPt)};
+    oLoginParams.sIhUser = {username, (int)strlen(username)};
+    oLoginParams.sIhPassword = {password, (int)strlen(password)};
+    oLoginParams.sIhCnnctPt = {IhConnectPt, (int)strlen(IhConnectPt)};
 
     if (!pEngine->login(&oLoginParams, &iCode))
     {
@@ -317,75 +244,16 @@ int main(int argc, char **argv)
         return BAD;
     }
 
-    while (TsLoggedIn == 0)
-    {
-        sleep(1);
-    }
-
-    if (TsLoggedIn == -1)
-    {
-        std::cerr << "login to ts failed, check user/pass or permissions" << std::endl;
-        delete pEngine;
-        delete pCallbacks;
-        delete pAdmCallbacks;
-        return BAD;
-    }
-
-    RApi::AccountInfo pAccount;
-    pAccount.sIbId = {"Ironbeam", (int)strlen("Ironbeam")};
-    pAccount.sFcmId = {"Ironbeam", (int)strlen("Ironbeam")};
-    pAccount.sAccountId = {username, (int)strlen(username)};
-
-    if (!pEngine->subscribeOrder(&pAccount, &iCode))
-    {
-        std::cerr << "error subscribing to orders: " << iCode << std::endl;
-        delete pEngine;
-        delete pCallbacks;
-        delete pAdmCallbacks;
-        return BAD;
-    }
-
-    tsNCharcb sTickerMd = {tickerMd, (int)strlen(tickerMd)};
-    tsNCharcb sTickerOrder = {tickerOrder, (int)strlen(tickerOrder)};
-
+    tsNCharcb sTicker = {ticker, (int)strlen(ticker)};
     tsNCharcb sExchange = {"CME", (int)strlen("CME")};
-    tsNCharcb sTradeRoute = {"globex", (int)strlen("globex")};
-    
-    buyOrder.iQty = QTY;
-    buyOrder.sTicker = sTickerOrder;
-    buyOrder.sExchange = sExchange;
-    buyOrder.pAccount = &pAccount;
-    buyOrder.sTradeRoute = sTradeRoute;
-    buyOrder.sDuration = RApi::sORDER_DURATION_DAY;
-    buyOrder.sBuySellType = RApi::sBUY_SELL_TYPE_BUY;
-    buyOrder.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
 
-    sellOrder.iQty = QTY;
-    sellOrder.sTicker = sTickerOrder;
-    sellOrder.sExchange = sExchange;
-    sellOrder.pAccount = &pAccount;
-    sellOrder.sTradeRoute = sTradeRoute;
-    sellOrder.sDuration = RApi::sORDER_DURATION_DAY;
-    sellOrder.sBuySellType = RApi::sBUY_SELL_TYPE_SELL;
-    sellOrder.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
+    RApi::BarParams bar_params;
+    bar_params.sTicker = sTicker;
+    bar_params.sExchange = sExchange;
+    bar_params.iSpecifiedMinutes = WIN;
+    bar_params.iType = RApi::BAR_TYPE_MINUTE;
 
-    if (!pEngine->getPriceIncrInfo(&sExchange, &sTickerOrder, &iCode))
-    {
-        std::cerr << "error subscribing to market data: " << iCode << std::endl;
-        delete pEngine;
-        delete pCallbacks;
-        delete pAdmCallbacks;
-        return BAD;
-    }
-
-    while (RcvdPriceIncr == false)
-    {
-        sleep(1);
-    }
-
-    int iFlags = (RApi::MD_PRINTS);
-
-    if (!pEngine->subscribe(&sExchange, &sTickerMd, iFlags, &iCode))
+    if (!pEngine->subscribeBar(&bar_params, &iCode))
     {
         std::cerr << "error subscribing to market data: " << iCode << std::endl;
         delete pEngine;
@@ -396,12 +264,6 @@ int main(int argc, char **argv)
 
     std::cout << "armed..." << std::endl;
     sleep(23400);
-
-    tsNCharcb exitType = RApi::sORDER_ENTRY_TYPE_AUTO;
-    if (!pEngine->exitPosition(&pAccount, NULL, NULL, &exitType, NULL, NULL, &iCode))
-    {
-        std::cerr << "error exiting all positions: " << iCode << std::endl;
-    }
 
     delete pEngine;
     delete pCallbacks;
