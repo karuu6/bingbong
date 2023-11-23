@@ -11,8 +11,8 @@
 #define SIG_WIDTH 5
 #define FEAT_WIDTH 7
 
-#define WIN 1 // MINUTES
-#define FWD 5
+#define WIN 60 // SECONDS
+#define FWD 10 // WINS
 
 int IhLoggedIn = 0;
 int MdLoggedIn = 0;
@@ -115,19 +115,19 @@ int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
     features[ix][2] = pInfo->dClosePrice;
     if (ix >= 8)
     {
-        features[ix][3] = (max_feat(ix - 8, ix, 0) + min_feat(ix - 8, ix, 1)) / 2;
+        features[ix][3] = (max_feat(ix - 8, ix, 0) + min_feat(ix - 8, ix, 1)) / 2.;
     }
     if (ix >= 25)
     {
-        features[ix][4] = (max_feat(ix - 25, ix, 0) + min_feat(ix - 25, ix, 1)) / 2;
+        features[ix][4] = (max_feat(ix - 25, ix, 0) + min_feat(ix - 25, ix, 1)) / 2.;
     }
     if (ix >= 50)
     {
-        features[ix][5] = (features[ix - 25][3] + features[ix - 25][4])/ 2;
+        features[ix][5] = (features[ix - 25][3] + features[ix - 25][4]) / 2.;
     }
     if (ix >= 76)
     {
-        features[ix][6] = (max_feat(ix - 76, ix - 25, 0) + min_feat(ix - 76, ix - 25, 1)) / 2;
+        features[ix][6] = (max_feat(ix - 76, ix - 25, 0) + min_feat(ix - 76, ix - 25, 1)) / 2.;
 
         signals[ix][0] = (features[ix][3] - features[ix][4]) / features[ix][4];
         signals[ix][1] = (pInfo->dClosePrice - features[ix][4]) / features[ix][4];
@@ -136,17 +136,20 @@ int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
         signals[ix][4] = (features[ix][5] - features[ix][6]) / features[ix][6];
     }
 
-    std::cout << ix << std::endl;
-    for (unsigned int j = 0; j < FEAT_WIDTH; j++)
+    if (ix >= 76 + FWD)
     {
-        std::cout << features[ix][j] << "\t";
+        std::cout << "[";
+        for (unsigned int j = 0; j < SIG_WIDTH; j++)
+        {
+            std::cout << signals[ix - FWD][j];
+            if (j < SIG_WIDTH - 1)
+            {
+                std::cout << ", ";
+            }
+        }
+        std::cout << "]" << std::endl;
+        std::cout << (features[ix][2] - features[ix - FWD][2]) << std::endl;
     }
-    std::cout << std::endl;
-    for (unsigned int j = 0; j < SIG_WIDTH; j++)
-    {
-        std::cout << signals[ix][j] << "\t";
-    }
-    std::cout << std::endl;
 
     ix++;
     *aiCode = API_OK;
@@ -244,14 +247,28 @@ int main(int argc, char **argv)
         return BAD;
     }
 
+    while (IhLoggedIn == 0)
+    {
+        sleep(1);
+    }
+
+    if (IhLoggedIn == -1)
+    {
+        std::cerr << "login to ih failed, check user/pass or permissions" << std::endl;
+        delete pEngine;
+        delete pCallbacks;
+        delete pAdmCallbacks;
+        return BAD;
+    }
+
     tsNCharcb sTicker = {ticker, (int)strlen(ticker)};
     tsNCharcb sExchange = {"CME", (int)strlen("CME")};
 
     RApi::BarParams bar_params;
     bar_params.sTicker = sTicker;
     bar_params.sExchange = sExchange;
-    bar_params.iSpecifiedMinutes = WIN;
-    bar_params.iType = RApi::BAR_TYPE_MINUTE;
+    bar_params.iSpecifiedSeconds = WIN;
+    bar_params.iType = RApi::BAR_TYPE_SECOND;
 
     if (!pEngine->subscribeBar(&bar_params, &iCode))
     {
