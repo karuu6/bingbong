@@ -13,6 +13,7 @@ bin/
 # App
 data/
 Makefile
+*.bin
 
 # VSCode
 .vscode/

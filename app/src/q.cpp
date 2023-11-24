@@ -1,8 +1,9 @@
-#include <cmath>
 #include <limits>
 #include <cstring>
 #include <unistd.h>
 #include <iostream>
+
+#include "mlpack.hpp"
 
 #include "config.h"
 #include "RApiPlus.h"
@@ -11,12 +12,19 @@
 #define SIG_WIDTH 5
 #define FEAT_WIDTH 7
 
-#define WIN 60 // SECONDS
-#define FWD 10 // WINS
+#define FWD 5 // MINS
 
 int IhLoggedIn = 0;
 int MdLoggedIn = 0;
 RApi::REngine *pEngine;
+
+double p5_n = 0;
+double p5_sum = 0;
+double p6_n = 0;
+double p6_sum = 0;
+double p7_n = 0;
+double p7_sum = 0;
+mlpack::RandomForest<mlpack::GiniGain, mlpack::RandomDimensionSelect> rf;
 
 unsigned int ix = 0;
 double signals[ROWS][SIG_WIDTH];
@@ -110,6 +118,10 @@ int Callbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
 
 int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
 {
+    if (ix >= ROWS) {
+        *aiCode = API_OK;
+        return OK;
+    }
     features[ix][0] = pInfo->dHighPrice;
     features[ix][1] = pInfo->dLowPrice;
     features[ix][2] = pInfo->dClosePrice;
@@ -138,18 +150,48 @@ int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
 
     if (ix >= 76 + FWD)
     {
-        std::cout << "[";
-        for (unsigned int j = 0; j < SIG_WIDTH; j++)
+        size_t pred;
+        arma::vec prob;
+        arma::vec x_pred(signals[ix - FWD], SIG_WIDTH, false, true);
+        rf.Classify(x_pred, pred, prob);
+        double p_score = prob.at(1);
+
+        if (p_score > .7)
         {
-            std::cout << signals[ix - FWD][j];
-            if (j < SIG_WIDTH - 1)
-            {
-                std::cout << ", ";
-            }
+            p7_n += 1;
+            p7_sum += (features[ix][2] - features[ix - FWD][2]);
         }
-        std::cout << "]" << std::endl;
-        std::cout << (features[ix][2] - features[ix - FWD][2]) << std::endl;
+        else if (p_score > .6)
+        {
+            p6_n += 1;
+            p6_sum += (features[ix][2] - features[ix - FWD][2]);
+        }
+        else if (p_score > .5)
+        {
+            p5_n += 1;
+            p5_sum += (features[ix][2] - features[ix - FWD][2]);
+        }
+        else if (p_score < .3)
+        {
+            p7_n += 1;
+            p7_sum += (features[ix - FWD][2] - features[ix][2]);
+        }
+        else if (p_score < .4)
+        {
+            p6_n += 1;
+            p6_sum += (features[ix - FWD][2] - features[ix][2]);
+        }
+        else if (p_score < .5)
+        {
+            p5_n += 1;
+            p5_sum += (features[ix - FWD][2] - features[ix][2]);
+        }
     }
+
+    std::cout << p5_sum << " | " << p5_n << std::endl;
+    std::cout << p6_sum << " | " << p6_n << std::endl;
+    std::cout << p7_sum << " | " << p7_n << std::endl;
+    std::cout << std::endl;
 
     ix++;
     *aiCode = API_OK;
@@ -267,8 +309,10 @@ int main(int argc, char **argv)
     RApi::BarParams bar_params;
     bar_params.sTicker = sTicker;
     bar_params.sExchange = sExchange;
-    bar_params.iSpecifiedSeconds = WIN;
-    bar_params.iType = RApi::BAR_TYPE_SECOND;
+    bar_params.iSpecifiedMinutes = 1;
+    bar_params.iType = RApi::BAR_TYPE_MINUTE;
+
+    mlpack::data::Load("model.bin", "model", rf);
 
     if (!pEngine->subscribeBar(&bar_params, &iCode))
     {
@@ -280,7 +324,7 @@ int main(int argc, char **argv)
     }
 
     std::cout << "armed..." << std::endl;
-    sleep(23400);
+    sleep(23460);
 
     delete pEngine;
     delete pCallbacks;
