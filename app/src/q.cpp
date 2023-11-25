@@ -12,7 +12,7 @@
 #define SIG_WIDTH 5
 #define FEAT_WIDTH 7
 
-#define FWD 5 // MINS
+#define FWD 10 // MINS
 
 int IhLoggedIn = 0;
 int MdLoggedIn = 0;
@@ -161,37 +161,37 @@ int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
             p7_n += 1;
             p7_sum += (features[ix][2] - features[ix - FWD][2]);
         }
-        else if (p_score > .6)
+        if (p_score > .6)
         {
             p6_n += 1;
             p6_sum += (features[ix][2] - features[ix - FWD][2]);
         }
-        else if (p_score > .5)
+        if (p_score > .5)
         {
             p5_n += 1;
             p5_sum += (features[ix][2] - features[ix - FWD][2]);
         }
-        else if (p_score < .3)
+        if (p_score < .3)
         {
             p7_n += 1;
             p7_sum += (features[ix - FWD][2] - features[ix][2]);
         }
-        else if (p_score < .4)
+        if (p_score < .4)
         {
             p6_n += 1;
             p6_sum += (features[ix - FWD][2] - features[ix][2]);
         }
-        else if (p_score < .5)
+        if (p_score < .5)
         {
             p5_n += 1;
             p5_sum += (features[ix - FWD][2] - features[ix][2]);
         }
-    }
 
-    std::cout << p5_sum << " | " << p5_n << std::endl;
-    std::cout << p6_sum << " | " << p6_n << std::endl;
-    std::cout << p7_sum << " | " << p7_n << std::endl;
-    std::cout << std::endl;
+        std::cout << p5_sum << " | " << p5_n << std::endl;
+        std::cout << p6_sum << " | " << p6_n << std::endl;
+        std::cout << p7_sum << " | " << p7_n << std::endl;
+        std::cout << std::endl;
+    }
 
     ix++;
     *aiCode = API_OK;
@@ -312,7 +312,7 @@ int main(int argc, char **argv)
     bar_params.iSpecifiedMinutes = 1;
     bar_params.iType = RApi::BAR_TYPE_MINUTE;
 
-    mlpack::data::Load("model.bin", "model", rf);
+    mlpack::data::Load("mnq_10_bc0.bin", "model", rf);
 
     if (!pEngine->subscribeBar(&bar_params, &iCode))
     {
