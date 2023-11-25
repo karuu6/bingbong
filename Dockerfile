@@ -8,5 +8,5 @@ RUN apt-get -y install libmlpack-dev libarmadillo-dev libensmallen-dev
 
 RUN make -C /app q
 
-# WORKDIR /app
-# ENTRYPOINT [ "./bin/q" ]
+WORKDIR /app
+ENTRYPOINT [ "./bin/q" ]
