@@ -6,12 +6,11 @@
 *.pem
 
 # Build
-log/
-lib/
-bin/
+# log/
+# lib/
+# bin/
 
-# App
-data/
+# Model
 *.bin
 
 # VSCode
