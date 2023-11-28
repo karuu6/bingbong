@@ -8,6 +8,9 @@ bin/q: src/q.cpp include/RApiPlus.h
 	$(CC) $(FLAGS) $(INCLUDES) -o bin/q src/q.cpp $(LIBS)
 bin/train: model/train.cpp
 	$(CC) -o bin/train model/train.cpp -larmadillo
+bin/test: model/test.cpp
+	$(CC) -o bin/test model/test.cpp -larmadillo
 
 q: bin/q
 train: bin/train
+test: bin/test
