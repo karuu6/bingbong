@@ -4,9 +4,9 @@
 #define BAD 1
 #define GOOD 0
 
-char *appname = "q";
+char *appname = "l";
 char *version = "0.0.1";
-char *logfile = "log/q.log";
+char *logfile = "log/l.log";
 
 char *Envp[9] = {
     "MML_DMN_SRVR_ADDR=ritpz01001.01.rithmic.com:65000~ritpz01000.01.rithmic.com:65000~ritpz01001.01.rithmic.net:65000~ritpz01000.01.rithmic.net:65000~ritpz01001.01.theomne.net:65000~ritpz01000.01.theomne.net:65000~ritpz01001.01.theomne.com:65000~ritpz01000.01.theomne.com:65000",
@@ -16,10 +16,10 @@ char *Envp[9] = {
     "MML_LOGGER_ADDR=ritpz01000.01.rithmic.com:45454~ritpz01000.01.rithmic.net:45454~ritpz01000.01.theomne.net:45454~ritpz01000.01.theomne.com:45454",
     "MML_LOG_TYPE=log_net",
     "MML_SSL_CLNT_AUTH_FILE=rithmic_ssl_cert_auth_params",
-    "USER=q",
+    "USER=l",
     0
 };
-char *MdConnectPt = "login_agent_tp01_sumc";
+char *MdConnectPt = "login_agent_tp01_sumc"; // login_agent_tp_r01c
 char *TsConnectPt = "login_agent_prodc";
 char *IhConnectPt = "login_agent_historyc";
 
