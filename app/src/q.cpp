@@ -12,7 +12,8 @@
 #define SIG_WIDTH 5
 #define FEAT_WIDTH 7
 
-#define FWD 10 // MINS
+#define FWD 10
+#define LKB 10
 
 int IhLoggedIn = 0;
 int MdLoggedIn = 0;
@@ -146,6 +147,32 @@ int Callbacks::Bar(RApi::BarInfo *pInfo, void *pContext, int *aiCode)
         signals[ix][2] = (pInfo->dClosePrice - std::max(features[ix][5], features[ix][6])) / std::max(features[ix][5], features[ix][6]);
         signals[ix][3] = (pInfo->dClosePrice - features[ix][3]) / features[ix][3];
         signals[ix][4] = (features[ix][5] - features[ix][6]) / features[ix][6];
+    }
+
+    if (ix >= 76 + FWD + LKB - 1)
+    {
+        std::vector<size_t> vec_labels;
+        for (unsigned int j = ix - LKB + 1; j <= ix; j++)
+        {
+            if (features[j][2] > features[j - FWD][2])
+            {
+                vec_labels.push_back(1);
+            }
+            else
+            {
+                vec_labels.push_back(0);
+            }
+        }
+        arma::Row<size_t> labels(vec_labels);
+        arma::mat dataset(&signals[ix - FWD - LKB + 1][0], 10, SIG_WIDTH, false, true);
+
+        const size_t numTrees = 100;
+        const size_t numClasses = 2;
+        const size_t minimumLeafSize = 1;
+
+        mlpack::RandomForest<mlpack::GiniGain, mlpack::RandomDimensionSelect> rf(
+            dataset, labels, numClasses, numTrees, minimumLeafSize
+        );
     }
 
     if (ix >= 76 + FWD)

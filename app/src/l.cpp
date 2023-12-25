@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <iostream>
 
-#define TH 4
+#define TH 2
 
 int TsLoggedIn = 0;
 int MdLoggedIn = 0;
@@ -22,13 +22,11 @@ char acOrderNum[32];
 char bcOrderNum[32];
 bool aOrderGood = true;
 bool bOrderGood = true;
-
 tsNCharcb aOrderNum = {acOrderNum, 0};
 tsNCharcb bOrderNum = {bcOrderNum, 0};
 
-double last_mid = 0;
-double best_bid = 0;
-double best_ask = 0;
+double last_bid = 0;
+double last_ask = 0;
 
 class AdmCallbacks : public RApi::AdmCallbacks
 {
@@ -43,7 +41,7 @@ class Callbacks : public RApi::RCallbacks
 public:
     Callbacks() {}
     ~Callbacks() {}
-    virtual int TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode);
+    // virtual int TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode);
     virtual int BestBidQuote(RApi::BidInfo *pInfo, void *pContext, int *aiCode);
     virtual int BestAskQuote(RApi::AskInfo *pInfo, void *pContext, int *aiCode);
 
@@ -93,75 +91,16 @@ int Callbacks::Alert(RApi::AlertInfo *pInfo, void *pContext, int *aiCode)
     return OK;
 }
 
-int Callbacks::TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode)
+int Callbacks::BestBidQuote(RApi::BidInfo *pInfo, void *pContext, int *aiCode)
 {
-    if (best_bid == 0 || best_ask == 0)
+    double bid = pInfo->dPrice;
+    if (bid != last_bid && bOrderGood)
     {
-        *aiCode = API_OK;
-        return OK;
-    }
-
-    int iCode;
-    double mid = (best_bid + best_ask) / 2;
-    if (std::abs(mid - last_mid) > 1 && aOrderGood && bOrderGood)
-    {
-        long lpxa = (mid + TH) * 100;
-        double pxa = lpxa - lpxa % 25;
-        pxa = pxa / 100;
-
-        if (aOrderNum.iDataLen == 0)
-        {
-            RApi::OrderParams pEntry;
-            pEntry.dPrice = pxa;
-            pEntry.iQty = 1;
-            pEntry.pAccount = &pAccount;
-            pEntry.sBuySellType = RApi::sBUY_SELL_TYPE_SELL;
-            pEntry.sOrderType = RApi::sORDER_TYPE_LIMIT;
-            pEntry.sDuration = RApi::sORDER_DURATION_GTC;
-            pEntry.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
-            pEntry.sExchange = sExchange;
-            pEntry.sTicker = sTicker;
-            pEntry.sTradeRoute = sTradeRoute;
-            pEntry.sTag = {"A", 1};
-
-            RApi::BracketTier target, stop;
-            target.iTicks = TH * 4;
-            target.llQty = 1;
-            stop.iTicks = TH * 4;
-            stop.llQty = 1;
-
-            RApi::BracketParams pBracketParams;
-            pBracketParams.asStopArray = &stop;
-            pBracketParams.asTargetArray = &target;
-            pBracketParams.iStopArrayLen = 1;
-            pBracketParams.iTargetArrayLen = 1;
-            pBracketParams.sBracketType = RApi::sBRACKET_TYPE_TARGET_AND_STOP;
-            pBracketParams.sOrderOperationType = RApi::sORDER_OPERATION_TYPE_FOCCA;
-
-            pEngine->sendBracketOrder(&pEntry, &pBracketParams, &iCode);
-        }
-        else
-        {
-            RApi::ModifyLimitOrderParams pParams;
-            pParams.dPrice = pxa;
-            pParams.iQty = 1;
-            pParams.pAccount = &pAccount;
-            pParams.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
-            pParams.sOrderNum = aOrderNum;
-            pParams.sTicker = sTicker;
-            pParams.sExchange = sExchange;
-
-            pEngine->modifyOrder(&pParams, &iCode);
-        }
-
-        long lpxb = (mid - TH) * 100;
-        double pxb = lpxb - lpxb % 25;
-        pxb = pxb / 100;
-
+        int iCode;
         if (bOrderNum.iDataLen == 0)
         {
             RApi::OrderParams pEntry;
-            pEntry.dPrice = pxb;
+            pEntry.dPrice = bid - TH;
             pEntry.iQty = 1;
             pEntry.pAccount = &pAccount;
             pEntry.sBuySellType = RApi::sBUY_SELL_TYPE_BUY;
@@ -192,7 +131,7 @@ int Callbacks::TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode)
         else
         {
             RApi::ModifyLimitOrderParams pParams;
-            pParams.dPrice = pxb;
+            pParams.dPrice = bid - TH;
             pParams.iQty = 1;
             pParams.pAccount = &pAccount;
             pParams.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
@@ -202,26 +141,68 @@ int Callbacks::TradePrint(RApi::TradeInfo *pInfo, void *pContext, int *aiCode)
 
             pEngine->modifyOrder(&pParams, &iCode);
         }
-
-        last_mid = mid;
-        aOrderGood = false;
         bOrderGood = false;
     }
+    last_bid = bid;
 
-    *aiCode = API_OK;
-    return OK;
-}
-
-int Callbacks::BestBidQuote(RApi::BidInfo *pInfo, void *pContext, int *aiCode)
-{
-    best_bid = pInfo->dPrice;
     *aiCode = API_OK;
     return OK;
 }
 
 int Callbacks::BestAskQuote(RApi::AskInfo *pInfo, void *pContext, int *aiCode)
 {
-    best_ask = pInfo->dPrice;
+    double ask = pInfo->dPrice;
+    if (ask != last_ask && aOrderGood)
+    {
+        int iCode;
+        if (aOrderNum.iDataLen == 0)
+        {
+            RApi::OrderParams pEntry;
+            pEntry.dPrice = ask + TH;
+            pEntry.iQty = 1;
+            pEntry.pAccount = &pAccount;
+            pEntry.sBuySellType = RApi::sBUY_SELL_TYPE_SELL;
+            pEntry.sOrderType = RApi::sORDER_TYPE_LIMIT;
+            pEntry.sDuration = RApi::sORDER_DURATION_GTC;
+            pEntry.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
+            pEntry.sExchange = sExchange;
+            pEntry.sTicker = sTicker;
+            pEntry.sTradeRoute = sTradeRoute;
+            pEntry.sTag = {"A", 1};
+
+            RApi::BracketTier target, stop;
+            target.iTicks = TH * 4;
+            target.llQty = 1;
+            stop.iTicks = TH * 4;
+            stop.llQty = 1;
+
+            RApi::BracketParams pBracketParams;
+            pBracketParams.asStopArray = &stop;
+            pBracketParams.asTargetArray = &target;
+            pBracketParams.iStopArrayLen = 1;
+            pBracketParams.iTargetArrayLen = 1;
+            pBracketParams.sBracketType = RApi::sBRACKET_TYPE_TARGET_AND_STOP;
+            pBracketParams.sOrderOperationType = RApi::sORDER_OPERATION_TYPE_FOCCA;
+
+            pEngine->sendBracketOrder(&pEntry, &pBracketParams, &iCode);
+        }
+        else
+        {
+            RApi::ModifyLimitOrderParams pParams;
+            pParams.dPrice = ask + TH;
+            pParams.iQty = 1;
+            pParams.pAccount = &pAccount;
+            pParams.sEntryType = RApi::sORDER_ENTRY_TYPE_AUTO;
+            pParams.sOrderNum = aOrderNum;
+            pParams.sTicker = sTicker;
+            pParams.sExchange = sExchange;
+
+            pEngine->modifyOrder(&pParams, &iCode);
+        }
+        aOrderGood = false;
+    }
+    last_ask = ask;
+
     *aiCode = API_OK;
     return OK;
 }
